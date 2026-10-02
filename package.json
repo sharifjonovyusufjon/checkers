@@ -1,0 +1,23 @@
+{
+  "name": "checkers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram shashka bot, web app, and admin panel",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node src/game/engine.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "grammy": "^1.35.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "ws": "^8.18.0"
+  }
+}

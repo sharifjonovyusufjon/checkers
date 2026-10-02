@@ -1,0 +1,61 @@
+:root {
+  --ink: #14241c;
+  --felt: #1d6a43;
+  --felt-dark: #114d31;
+  --cream: #f3e6c8;
+  --brass: #e4c27a;
+  --walnut: #2a2118;
+  --paper: #f7f1e4;
+  --line: rgba(255, 248, 230, 0.14);
+  color: var(--paper);
+  background: var(--ink);
+  font-family: Outfit, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(1200px 600px at 50% -10%, #245c40, var(--ink) 55%); }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+#app { max-width: 480px; margin: 0 auto; padding: 18px 16px 28px; }
+.top { display: flex; justify-content: space-between; align-items: end; gap: 12px; }
+h1 { font-family: Fraunces, Georgia, serif; font-size: 40px; line-height: 0.9; margin: 0; letter-spacing: -0.04em; }
+.coins { text-align: right; }
+.coins b { display: block; font-size: 28px; font-family: Fraunces, Georgia, serif; }
+.coins span, .muted { color: rgba(247, 241, 228, 0.68); font-size: 13px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0; }
+.stats div, .card, .panel { background: rgba(255, 248, 230, 0.06); border: 1px solid var(--line); border-radius: 16px; }
+.stats div { padding: 10px 12px; }
+.stats b { display: block; font-size: 20px; }
+.tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.tabs button, .chip, .btn, .ghost { border: 0; border-radius: 999px; padding: 10px 14px; }
+.tabs button { background: transparent; color: rgba(247,241,228,.7); }
+.tabs button.on { background: var(--paper); color: var(--ink); }
+.stakes { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.chip { background: rgba(255,248,230,.08); border: 1px solid var(--line); }
+.chip.on { background: var(--brass); color: #2a2118; border-color: transparent; }
+.btn { width: 100%; background: var(--brass); color: #24180d; font-weight: 700; border-radius: 14px; padding: 14px 16px; }
+.ghost { background: transparent; border: 1px solid var(--line); width: auto; }
+.row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.board-wrap { margin-top: 12px; }
+.board { width: 100%; aspect-ratio: 1; display: grid; grid-template-columns: repeat(8, 1fr); border-radius: 18px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.28); }
+.sq { border: 0; padding: 0; position: relative; display: grid; place-items: center; }
+.sq.dark { background: var(--felt-dark); }
+.sq.light { background: #d7b56d; }
+.sq.last { box-shadow: inset 0 0 0 3px rgba(255, 236, 180, .55); }
+.sq.sel { box-shadow: inset 0 0 0 3px #fff6d8; }
+.sq.dest::after { content: ""; width: 28%; height: 28%; border-radius: 50%; background: rgba(255, 248, 230, .78); }
+.piece { width: 74%; height: 74%; border-radius: 50%; display: grid; place-items: center; font-size: 16px; }
+.piece.white { background: radial-gradient(circle at 35% 30%, #fff, #e7d3a4 62%, #b08958); color: #6d4c2a; box-shadow: inset 0 -4px 0 rgba(90, 55, 20, .25); }
+.piece.black { background: radial-gradient(circle at 35% 30%, #6a5344, #241910 70%); color: #e4c27a; box-shadow: inset 0 -4px 0 rgba(0,0,0,.35); }
+.turn { margin: 8px 0 0; font-weight: 700; }
+.toast { margin-top: 10px; color: #ffd7a8; }
+.modal { position: fixed; inset: 0; background: rgba(10, 16, 12, .72); display: grid; place-items: center; padding: 20px; }
+.panel { width: min(420px, 100%); padding: 18px; background: #1b2b23; }
+.panel h2 { font-family: Fraunces, Georgia, serif; margin: 0 0 8px; }
+.list { display: grid; gap: 8px; }
+.list div { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+input[type="number"] { width: 110px; background: transparent; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.packages { display: grid; gap: 8px; margin-top: 12px; }
+.lang button { margin: 0 6px 6px 0; }
+.gate { min-height: 70vh; display: grid; align-content: center; gap: 12px; }
+.who { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.timer { font-variant-numeric: tabular-nums; font-family: Fraunces, Georgia, serif; font-size: 28px; }
