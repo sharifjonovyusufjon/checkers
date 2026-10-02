@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 const { WebSocketServer } = require("ws");
 const config = require("../config");
 const { t, bundle, normalizeLang } = require("../i18n");
-const { User, Game, Payment, Audit, LoginCode, getSettings, isAdminId } = require("../models");
+const { User, Game, Payment, Audit, LoginCode, getSettings, clearSettingsCache, isAdminId } = require("../models");
 const { userFromInitData } = require("../telegram/webapp");
 const { createInvoiceLink } = require("../payments");
 const { telegramApi } = require("../telegram/api");
@@ -102,8 +102,8 @@ function createServer() {
   app.disable("x-powered-by");
   app.use(express.json({ limit: "80kb" }));
   app.use(cookieParser());
-  app.use("/game", express.static(path.join(publicDir, "game"), { maxAge: "1h" }));
-  app.use("/admin", express.static(path.join(publicDir, "admin"), { maxAge: "1h" }));
+  app.use("/game", express.static(path.join(publicDir, "game"), { maxAge: 0 }));
+  app.use("/admin", express.static(path.join(publicDir, "admin"), { maxAge: 0 }));
 
   app.get("/health", (req, res) => {
     res.json({ ok: true });
@@ -186,6 +186,7 @@ function createServer() {
         coins: coinAgg[0]?.sum || 0,
         stars: starAgg[0]?.sum || 0,
         queue: manager.queueSize(),
+        ...manager.presence(true),
         starBalance,
       });
     })
@@ -355,6 +356,7 @@ function createServer() {
       settings.adminIds = [...new Set(adminIds)];
       settings.markModified("packages");
       await settings.save();
+      clearSettingsCache();
       await Audit.create({ adminTelegramId: req.adminId, action: "settings", meta: { welcomeCoins, minStake, maxStake, moveSeconds } });
       res.json({ ok: true });
     })
@@ -411,7 +413,7 @@ function createServer() {
     asyncRoute(async (req, res) => {
       const user = await readUser(req);
       if (!user) return res.status(401).json({ error: "auth" });
-      res.json({ items: await manager.leaderboard() });
+      res.json(await manager.leaderboard());
     })
   );
 
@@ -439,11 +441,13 @@ function createServer() {
       try {
         const type = String(req.body?.type || "");
         if (type === "queue") await manager.joinQueue(user, req.body?.stake);
+        else if (type === "accept") await manager.acceptOffer(user, req.body?.id);
         else if (type === "cancel") await manager.cancelQueue(user);
         else if (type === "move") await manager.move(user, req.body);
         else if (type === "resign") await manager.resign(user);
         else if (type === "ack") await manager.ack(user);
         else if (type === "lang") await manager.setLang(user, req.body?.lang);
+        else if (type === "nationality") await manager.setNationality(user, req.body?.nationality);
         else return res.status(400).json({ error: "bad" });
         const fresh = await User.findById(user._id);
         res.json(await manager.view(fresh));
@@ -493,11 +497,13 @@ function createServer() {
         const user = await User.findById(userId);
         if (!user) return;
         if (msg.type === "queue") await manager.joinQueue(user, msg.stake);
+        else if (msg.type === "accept") await manager.acceptOffer(user, msg.id);
         else if (msg.type === "cancel") await manager.cancelQueue(user);
         else if (msg.type === "move") await manager.move(user, msg);
         else if (msg.type === "resign") await manager.resign(user);
         else if (msg.type === "ack") await manager.ack(user);
         else if (msg.type === "lang") await manager.setLang(user, msg.lang);
+        else if (msg.type === "nationality") await manager.setNationality(user, msg.nationality);
         else return;
         const fresh = await User.findById(userId);
         ws.send(JSON.stringify({ type: "state", ...(await manager.view(fresh)) }));

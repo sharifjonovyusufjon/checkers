@@ -50,11 +50,13 @@ function shell(body) {
     ["broadcast", "a_broadcast"],
     ["journal", "a_journal"],
   ];
-  return `<div class="shell"><nav><h1>Checkers</h1>${items.map(([id, key]) => `<button class="${state.page === id ? "on" : ""}" data-go="${id}">${esc(text(key))}</button>`).join("")}<button data-act="logout">${esc(text("a_logout"))}</button><div class="langs">${["uz", "ru", "en", "ko"].map((lang) => `<button class="${state.lang === lang ? "on" : ""}" data-lang="${lang}">${lang}</button>`).join("")}</div></nav><main>${body}</main></div>`;
+  const dark = document.documentElement.dataset.theme === "dark";
+  return `<div class="shell"><nav><h1>Checkers</h1>${items.map(([id, key]) => `<button class="${state.page === id ? "on" : ""}" data-go="${id}">${esc(text(key))}</button>`).join("")}<button data-act="theme">${dark ? "Light" : "Dark"}</button><button data-act="logout">${esc(text("a_logout"))}</button><div class="langs">${["uz", "ru", "en", "ko"].map((lang) => `<button class="${state.lang === lang ? "on" : ""}" data-lang="${lang}">${lang}</button>`).join("")}</div></nav><main>${body}</main></div>`;
 }
 function login() {
+  const dark = document.documentElement.dataset.theme === "dark";
   const bot = state.meta.adminBot ? `https://t.me/${state.meta.adminBot}` : "#";
-  app.innerHTML = `<section class="login"><form class="card" id="login-form"><h1>${esc(text("a_login"))}</h1><p>${esc(text("a_help"))}</p><p><a href="${bot}" target="_blank" rel="noreferrer">${esc(text("a_open_bot"))}</a></p><label>${esc(text("a_code"))}<br><input name="code" inputmode="numeric" maxlength="6" required></label><div class="toolbar"><button class="btn" type="submit">${esc(text("a_enter"))}</button></div>${state.toast ? `<p class="err">${esc(state.toast)}</p>` : ""}<div class="langs">${["uz", "ru", "en", "ko"].map((lang) => `<button type="button" data-lang="${lang}">${lang}</button>`).join("")}</div></form></section>`;
+  app.innerHTML = `<section class="login"><form class="card" id="login-form"><h1>${esc(text("a_login"))}</h1><p>${esc(text("a_help"))}</p><p><a href="${bot}" target="_blank" rel="noreferrer">${esc(text("a_open_bot"))}</a></p><label>${esc(text("a_code"))}<br><input name="code" inputmode="numeric" maxlength="6" required></label><div class="toolbar"><button class="btn" type="submit">${esc(text("a_enter"))}</button></div>${state.toast ? `<p class="err">${esc(state.toast)}</p>` : ""}<div class="langs">${["uz", "ru", "en", "ko"].map((lang) => `<button type="button" data-lang="${lang}">${lang}</button>`).join("")}<button type="button" data-act="theme">${dark ? "Light" : "Dark"}</button></div></form></section>`;
 }
 function table(headers, rows) {
   return `<div class="box" style="overflow:auto"><table><thead><tr>${headers.map((item) => `<th>${esc(item)}</th>`).join("")}</tr></thead><tbody>${rows || `<tr><td colspan="${headers.length}">${esc(text("a_empty"))}</td></tr>`}</tbody></table></div>`;
@@ -91,10 +93,15 @@ function render() {
       ["a_today", d.today],
       ["a_circulation", d.coins],
       ["a_revenue", d.stars],
+      ["a_online", d.online || 0],
       ["a_queue", d.queue],
       ["a_star_balance", d.starBalance ?? "—"],
     ];
-    body = `<h2>${esc(text("a_dashboard"))}</h2><div class="grid">${cards.map(([key, value]) => `<div class="stat"><span>${esc(text(key))}</span><b>${esc(value)}</b></div>`).join("")}</div>`;
+    const people = d.people || [];
+    const seekers = people.filter((person) => person.stake != null);
+    const seekerRows = seekers.map((person) => `<tr><td>${esc(person.telegramId || "—")}</td><td>${esc(person.name)}</td><td>${person.stake}</td><td>${person.coins}</td></tr>`).join("");
+    const onlineRows = people.map((person) => `<tr><td>${esc(person.telegramId || "—")}</td><td>${esc(person.name)}</td><td>${person.stake == null ? "—" : person.stake}</td><td>${person.coins}</td></tr>`).join("");
+    body = `<h2>${esc(text("a_dashboard"))}</h2><div class="grid">${cards.map(([key, value]) => `<div class="stat"><span>${esc(text(key))}</span><b>${esc(value)}</b></div>`).join("")}</div><h3>${esc(text("a_seekers"))}</h3>${table(["Telegram", text("a_name"), text("a_stake"), text("a_coins")], seekerRows)}<h3>${esc(text("a_online"))}</h3>${table(["Telegram", text("a_name"), text("a_stake"), text("a_coins")], onlineRows)}`;
   } else if (state.page === "users" && state.data) {
     const rows = state.data.items.map((user) => `<tr><td>${esc(user.telegramId)}</td><td>${esc(user.firstName)} ${esc(user.lastName)}<br>@${esc(user.username || "—")}</td><td>${esc(user.phone || "—")}<br>${esc(user.nationality || "—")}</td><td>${user.coins}</td><td>${user.wins}/${user.losses}/${user.draws}</td><td>${user.banned ? esc(text("a_banned")) : user.language || "—"}</td><td><button class="ghost" data-edit="${user._id}">${esc(text("a_edit"))}</button></td></tr>`).join("");
     body = `<h2>${esc(text("a_users"))}</h2><form class="toolbar" id="search"><input name="q" value="${esc(state.q)}" placeholder="${esc(text("a_search"))}"><button class="btn">${esc(text("a_search"))}</button></form>${table(["ID", text("a_name"), text("a_phone"), text("a_coins"), "W/L/D", text("a_status"), ""], rows)}${pager(state.data.total)}`;
@@ -139,6 +146,13 @@ function render() {
   app.innerHTML = shell(body) + modal;
 }
 app.addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-act='theme']")) {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("checkers-theme", next);
+    render();
+    return;
+  }
   const lang = ev.target.closest("[data-lang]");
   if (lang) {
     state.lang = lang.dataset.lang;
@@ -285,4 +299,7 @@ async function boot() {
     render();
   }
 }
+setInterval(() => {
+  if (state.authed && state.page === "dash" && !state.edit) show().catch(() => {});
+}, 5000);
 boot();

@@ -8,8 +8,11 @@ const queueUsers = new Map();
 const games = new Map();
 const byUser = new Map();
 const sockets = new Map();
+const profiles = new Map();
 const finishedFor = new Map();
 const locks = new Map();
+let lobbyTimer = null;
+let lobbyJson = "";
 let notifier = async () => {};
 let chain = Promise.resolve();
 
@@ -50,10 +53,77 @@ function bind(userId, ws) {
   const id = String(userId);
   if (!sockets.has(id)) sockets.set(id, new Set());
   sockets.get(id).add(ws);
+  scheduleLobby();
 }
 
 function unbind(userId, ws) {
-  sockets.get(String(userId))?.delete(ws);
+  const id = String(userId);
+  const set = sockets.get(id);
+  if (!set) return;
+  set.delete(ws);
+  if (!set.size) sockets.delete(id);
+  scheduleLobby();
+}
+
+function remember(user) {
+  if (!user) return;
+  profiles.set(String(user._id), {
+    name: displayName(user),
+    coins: user.coins || 0,
+    telegramId: String(user.telegramId || ""),
+  });
+}
+
+function presence(admin) {
+  const people = [];
+  for (const [id, set] of sockets) {
+    let live = false;
+    for (const ws of set) {
+      if (ws.readyState === 1) {
+        live = true;
+        break;
+      }
+    }
+    if (!live) continue;
+    const profile = profiles.get(id) || { name: "—", coins: 0, telegramId: "" };
+    const gameId = byUser.get(id);
+    const game = gameId ? games.get(gameId) : null;
+    const playing = Boolean(game && game.status === "active");
+    const row = {
+      id,
+      name: profile.name,
+      coins: profile.coins,
+      stake: queueUsers.has(id) ? queueUsers.get(id) : null,
+      playing,
+      versus: playing ? (String(game.white) === id ? game.blackName || "" : game.whiteName || "") : "",
+      game: playing ? gameId : "",
+    };
+    if (admin) row.telegramId = profile.telegramId || "";
+    people.push(row);
+  }
+  people.sort((a, b) => {
+    const waitingA = a.stake == null ? 1 : 0;
+    const waitingB = b.stake == null ? 1 : 0;
+    if (waitingA !== waitingB) return waitingA - waitingB;
+    if (a.stake != null && b.stake != null && a.stake !== b.stake) return b.stake - a.stake;
+    return b.coins - a.coins || a.name.localeCompare(b.name);
+  });
+  return { online: people.length, people };
+}
+
+function scheduleLobby() {
+  if (lobbyTimer) return;
+  lobbyTimer = setTimeout(() => {
+    lobbyTimer = null;
+    const json = JSON.stringify({ type: "lobby", ...presence(false) });
+    if (json === lobbyJson) return;
+    lobbyJson = json;
+    for (const set of sockets.values()) {
+      for (const ws of set) {
+        if (ws.readyState === 1) ws.send(json);
+      }
+    }
+  }, 250);
 }
 
 function queueSize() {
@@ -128,11 +198,14 @@ async function rules() {
 async function view(user) {
   const activeId = byUser.get(String(user._id));
   const game = (activeId && games.get(activeId)) || finishedFor.get(String(user._id)) || null;
+  remember(user);
+  scheduleLobby();
   return {
     user: publicUser(user),
     game: game ? presentGame(game, user._id) : null,
     queue: queueUsers.has(String(user._id)) ? queueUsers.get(String(user._id)) : null,
     rules: await rules(),
+    ...presence(false),
   };
 }
 
@@ -357,6 +430,40 @@ async function joinQueue(user, rawStake) {
   });
 }
 
+async function acceptOffer(user, targetId) {
+  return enqueue(async () => {
+    const settings = await getSettings();
+    if (settings.maintenance && !isAdminId(user.telegramId, settings)) throw fail("maintenance");
+    if (user.banned) throw fail("banned");
+    if (!user.language || !user.phone || !user.nationality) throw fail("need_reg");
+    const me = String(user._id);
+    const id = String(targetId || "");
+    if (!id || id === me) throw fail("offer_gone");
+    if (byUser.has(me)) throw fail("already_game");
+    const stake = queueUsers.get(id);
+    if (stake == null || byUser.has(id)) throw fail("offer_gone");
+    const fresh = await User.findById(me);
+    if (!fresh || fresh.coins < stake) throw fail("not_enough");
+    pull(me);
+    pull(id);
+    try {
+      await createMatch(me, id, stake);
+    } catch (err) {
+      if (!byUser.has(id)) {
+        const other = await User.findById(id);
+        if (other && !other.banned && other.coins >= stake) {
+          if (!queues.has(stake)) queues.set(stake, []);
+          queues.get(stake).push(id);
+          queueUsers.set(id, stake);
+        }
+      }
+      await push(me);
+      await push(id);
+      throw err;
+    }
+  });
+}
+
 async function cancelQueue(user) {
   return enqueue(async () => {
     pull(user._id);
@@ -424,6 +531,16 @@ async function setLang(user, lang) {
   await push(user._id);
 }
 
+async function setNationality(user, value) {
+  const text = String(value || "").trim().slice(0, 40);
+  const known = ["uz", "kr", "ru", "kz", "kg", "tj"];
+  if (!known.includes(text) && text.length < 2) throw fail("error_generic");
+  user.nationality = text;
+  user.pending = "";
+  await user.save();
+  await push(user._id);
+}
+
 async function loadActive() {
   const rows = await Game.find({ status: "active" });
   for (const game of rows) {
@@ -462,18 +579,22 @@ async function adminSettle(gameId, result, countStats) {
 }
 
 async function leaderboard() {
-  const rows = await User.find({ banned: { $ne: true } })
-    .sort({ wins: -1, coins: -1 })
-    .limit(20)
-    .select("firstName username wins losses draws coins telegramId");
-  return rows.map((user, index) => ({
-    n: index + 1,
-    name: displayName(user),
-    wins: user.wins || 0,
-    losses: user.losses || 0,
-    draws: user.draws || 0,
-    coins: user.coins || 0,
-  }));
+  const filter = { banned: { $ne: true } };
+  const [rows, total] = await Promise.all([
+    User.find(filter).sort({ wins: -1, coins: -1 }).limit(20).select("firstName username wins losses draws coins telegramId"),
+    User.countDocuments(filter),
+  ]);
+  return {
+    total,
+    items: rows.map((user, index) => ({
+      n: index + 1,
+      name: displayName(user),
+      wins: user.wins || 0,
+      losses: user.losses || 0,
+      draws: user.draws || 0,
+      coins: user.coins || 0,
+    })),
+  };
 }
 
 module.exports = {
@@ -481,14 +602,17 @@ module.exports = {
   bind,
   unbind,
   queueSize,
+  presence,
   view,
   push,
   joinQueue,
+  acceptOffer,
   cancelQueue,
   move,
   resign,
   ack,
   setLang,
+  setNationality,
   loadActive,
   startClock,
   adminSettle,

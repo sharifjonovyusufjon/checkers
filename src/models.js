@@ -102,7 +102,16 @@ const defaultPackages = [
   { id: "c1200", coins: 1200, stars: 200 },
 ];
 
+let settingsCache = null;
+let settingsCachedAt = 0;
+
+function clearSettingsCache() {
+  settingsCache = null;
+  settingsCachedAt = 0;
+}
+
 async function getSettings() {
+  if (settingsCache && Date.now() - settingsCachedAt < 8000) return settingsCache;
   let doc = await Setting.findById("global");
   if (!doc) {
     doc = await Setting.create({
@@ -116,6 +125,8 @@ async function getSettings() {
       adminIds: config.adminIds,
     });
   }
+  settingsCache = doc;
+  settingsCachedAt = Date.now();
   return doc;
 }
 
@@ -142,6 +153,7 @@ module.exports = {
   LoginCode,
   Audit,
   getSettings,
+  clearSettingsCache,
   ensureDefaults,
   isAdminId,
   defaultPackages,
